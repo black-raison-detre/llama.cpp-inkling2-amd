@@ -1326,6 +1326,18 @@ template<int DKQ, int ncols> struct mma_tile_sizes {
     using T_B_VKQ = tile<16,  8, half2, DATA_LAYOUT_I_MAJOR_MIRRORED>; // column-major
     using T_C_VKQ = tile<16, 16, half2, DATA_LAYOUT_I_MAJOR>;          // column-major
 };
+// Isolated experiment: retain F16 WMMA inputs, accumulate V*softmax(QK) in F32.
+#if defined(GGML_CUDA_INK2_FA_F32_VKQ)
+template<int ncols> struct mma_tile_sizes<128, ncols> {
+    using T_A_KQ  = tile<16, 8, half2, DATA_LAYOUT_I_MAJOR_MIRRORED>;
+    using T_B_KQ  = tile<16, 8, half2, DATA_LAYOUT_I_MAJOR_MIRRORED>;
+    using T_C_KQ  = tile<16,16, float, DATA_LAYOUT_I_MAJOR>;
+    using T_A_VKQ = tile<16, 8, half2, DATA_LAYOUT_I_MAJOR_MIRRORED>;
+    using T_B_VKQ = tile<16, 8, half2, DATA_LAYOUT_I_MAJOR_MIRRORED>;
+    using T_C_VKQ = tile<16,16, float, DATA_LAYOUT_I_MAJOR>;
+};
+#endif
+
 template<int ncols> struct mma_tile_sizes<80, ncols> {
     using T_A_KQ  = tile<16,  8, half2, DATA_LAYOUT_I_MAJOR_MIRRORED>; // row-major
     using T_B_KQ  = tile<16,  8, half2, DATA_LAYOUT_I_MAJOR_MIRRORED>; // column-major
@@ -1499,11 +1511,11 @@ static __device__ __forceinline__ void flash_attn_ext_f16_process_tile(
 #if defined(TURING_MMA_AVAILABLE)
     T_C_VKQ VKQ_C[cols_per_warp == 8 ? DVp/T_C_VKQ::I : DVp/(2*T_C_VKQ::J)];
 #elif defined(AMD_WMMA_256B_AVAILABLE)
-    T_C_VKQ VKQ_C[DVp % 32 != 0      ? DVp/T_C_VKQ::J : DVp/(2*T_C_VKQ::J)];
+    T_C_VKQ VKQ_C[(std::is_same_v<decltype(T_C_VKQ::x), float[T_C_VKQ::ne]> || DVp % 32 != 0) ? DVp/T_C_VKQ::J : DVp/(2*T_C_VKQ::J)];
 #elif defined(AMD_MFMA_AVAILABLE)
     T_C_VKQ VKQ_C[                                      DVp/T_C_VKQ::J];
 #elif defined(AMD_WMMA_AVAILABLE)
-    T_C_VKQ VKQ_C[                                      DVp/(2*T_C_VKQ::J)];
+    T_C_VKQ VKQ_C[std::is_same_v<decltype(T_C_VKQ::x), float[T_C_VKQ::ne]> ? DVp/T_C_VKQ::J : DVp/(2*T_C_VKQ::J)];
 #else // Volta
     T_C_VKQ VKQ_C[                                      DVp/(2*T_C_VKQ::J)];
 #endif // defined(TURING_MMA_AVAILABLE)

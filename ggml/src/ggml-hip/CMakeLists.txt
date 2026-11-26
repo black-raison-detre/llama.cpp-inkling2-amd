@@ -15,6 +15,18 @@ if (NOT DEFINED CMAKE_HIP_FLAGS_DEBUG)
     set(CMAKE_HIP_FLAGS_DEBUG "-g -Xarch_device -O2 -Xarch_host -O0")
 endif()
 
+option(GGML_HIP_INK2_FA_TUNING "Enable Inkling's opt-in gfx1151 F32 flash-attention path" OFF)
+if (GGML_HIP_INK2_FA_TUNING)
+    if (NOT GPU_TARGETS STREQUAL "gfx1151")
+        message(FATAL_ERROR "GGML_HIP_INK2_FA_TUNING is supported only for GPU_TARGETS=gfx1151")
+    endif()
+    set(INK2_FA_F32_TU "${CMAKE_CURRENT_SOURCE_DIR}/../ggml-cuda/template-instances/fattn-mma-f16-instance-ncols2_3.cu")
+    if (NOT EXISTS "${INK2_FA_F32_TU}")
+        message(FATAL_ERROR "Tuned attention translation unit is missing: ${INK2_FA_F32_TU}")
+    endif()
+    set_property(SOURCE "${INK2_FA_F32_TU}" APPEND PROPERTY COMPILE_DEFINITIONS GGML_CUDA_INK2_FA_F32_VKQ=1)
+endif()
+
 # CMake on Windows doesn't support the HIP language yet
 if (WIN32)
     set(CXX_IS_HIPCC TRUE)

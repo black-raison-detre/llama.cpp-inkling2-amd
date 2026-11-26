@@ -123,6 +123,22 @@ cmake -S . -B build-hip -G Ninja -DCMAKE_BUILD_TYPE=Release \
 cmake --build build-hip --target llama-server llama-bench llama-perplexity llama-cli llama-quantize -j "$(nproc)"
 ```
 
+### Optional gfx1151 F32 attention accumulation
+
+`GGML_HIP_INK2_FA_TUNING` defaults to `OFF` and accepts only `GPU_TARGETS=gfx1151`. It keeps F16 WMMA inputs and uses F32 accumulation for the head-128 GQA3 attention translation unit. Other attention translation units keep their existing configuration.
+
+On Windows, use a fresh build directory:
+
+```bat
+set GPU_TARGETS=gfx1151
+set INK_CMAKE=-DGGML_HIP_INK2_FA_TUNING=ON
+scripts\inkling2-amd\build-hip.cmd build-hip-gfx1151-f32
+```
+
+When launching binaries from that build, set `GGML_CUDA_INK2_ANY_AMD=1`, `GGML_CUDA_INK2_FA_GQA3=32` and `GGML_CUDA_INK2_FA_TILE1=0`. Setting runtime variables alone does not enable the F32 specialization in an ordinary build.
+
+On a Radeon 8060S, the combined preset passed 22 selected CPU-reference far-attention cases, including 131072 and 261120 keys; the default build failed those two long cases. Four-chunk 2K WikiText perplexity was effectively unchanged. Matched tests with F16 KV, batch 2048 and ubatch 1024 showed essentially unchanged throughput, so this remains an opt-in precision preset. These checks do not establish full-model long-context quality or extended stability.
+
 ## Run
 
 ```sh
